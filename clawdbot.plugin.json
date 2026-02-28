@@ -1,0 +1,18 @@
+{
+  "id": "xmpp-connector",
+  "name": "XMPP Channel",
+  "version": "0.1.0",
+  "description": "XMPP messaging channel with username/password authentication",
+  "author": "OpenClaw Team",
+  "license": "MIT",
+  "main": "plugin.ts",
+  "type": "module",
+  "openclaw": {
+    "extensions": ["./plugin.ts"],
+    "channels": ["xmpp-connector"],
+    "installDependencies": true
+  },
+  "dependencies": {
+    "simple-xmpp": "^1.3.0"
+  }
+}
