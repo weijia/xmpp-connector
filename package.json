@@ -30,7 +30,7 @@
       "./plugin.ts"
     ],
     "channels": [
-      "xmpp-connector"
+      "openclaw-xmpp-connector"
     ],
     "installDependencies": true
   }

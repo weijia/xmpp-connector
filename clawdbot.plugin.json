@@ -23,7 +23,7 @@
       "debug": { "type": "boolean", "default": false }
     }
   },
-  "channels": ["xmpp-connector"],
+  "channels": ["openclaw-xmpp-connector"],
   "openclaw": {
     "extensions": ["./plugin.ts"],
     "installDependencies": true
