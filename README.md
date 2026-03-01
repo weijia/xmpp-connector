@@ -23,8 +23,8 @@ Add the following configuration to your OpenClaw config file:
 ```json
 {
   "channels": {
-    "xmpp-connector": {
-      "username": "your-username",
+    "openclaw-xmpp-connector": {
+      "username": "your-username-without-server",
       "password": "your-password",
       "server": "xmpp-server.com",
       "port": 5222,
