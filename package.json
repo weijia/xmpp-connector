@@ -1,5 +1,5 @@
 {
-  "name": "@openclaw/xmpp-connector",
+  "name": "openclaw-xmpp-connector",
   "version": "0.1.0",
   "description": "XMPP channel plugin for OpenClaw — supports username/password authentication and message exchange",
   "main": "plugin.ts",
@@ -15,6 +15,10 @@
   ],
   "author": "Richard",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/weijia/xmpp-connector"
+  },
   "dependencies": {
     "@xmpp/client": "^0.13.1",
     "@xmpp/debug": "^0.13.1",
