@@ -7,9 +7,25 @@
   "license": "MIT",
   "main": "plugin.ts",
   "type": "module",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean", "default": true },
+      "username": { "type": "string", "description": "XMPP 用户名" },
+      "password": { "type": "string", "description": "XMPP 密码" },
+      "server": { "type": "string", "description": "XMPP 服务器地址" },
+      "port": { "type": "number", "default": 5222, "description": "XMPP 服务器端口" },
+      "systemPrompt": { "type": "string", "default": "", "description": "自定义系统提示" },
+      "gatewayToken": { "type": "string", "default": "", "description": "Gateway auth token (Bearer)" },
+      "gatewayPassword": { "type": "string", "default": "", "description": "Gateway auth password (alternative to token)" },
+      "sessionTimeout": { "type": "number", "default": 1800000, "description": "Session timeout in ms (default 30min)" },
+      "debug": { "type": "boolean", "default": false }
+    }
+  },
+  "channels": ["xmpp-connector"],
   "openclaw": {
     "extensions": ["./plugin.ts"],
-    "channels": ["xmpp-connector"],
     "installDependencies": true
   },
   "dependencies": {
