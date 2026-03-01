@@ -3,7 +3,7 @@
   "name": "XMPP Channel",
   "version": "0.1.0",
   "description": "XMPP messaging channel with username/password authentication",
-  "author": "OpenClaw Team",
+  "author": "Richard",
   "license": "MIT",
   "main": "plugin.ts",
   "type": "module",

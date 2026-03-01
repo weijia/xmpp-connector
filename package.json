@@ -13,7 +13,7 @@
     "channel",
     "messaging"
   ],
-  "author": "OpenClaw Team",
+  "author": "Richard",
   "license": "MIT",
   "dependencies": {
     "simple-xmpp": "^1.3.1"
