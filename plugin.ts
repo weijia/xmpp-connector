@@ -14,7 +14,8 @@ let globalXmppClient: any;
 
 // 配置处理函数
 function getConfig(cfg: ClawdbotConfig) {
-  const config = cfg.channels?.['xmpp-connector'] || {};
+  // 尝试从不同的配置键中读取配置
+  const config = cfg.channels?.['openclaw-xmpp-connector'] || cfg.channels?.['openclaw-xmpp-connector'] || {};
   console.log('[XMPP] getConfig 被调用，返回配置:', { username: config.username, server: config.server, port: config.port });
   return config;
 }
@@ -87,7 +88,7 @@ async function handleXMPPMessage(ctx: any) {
         name: 'OpenClaw',
       },
       channel: {
-        id: 'xmpp-connector',
+        id: 'openclaw-xmpp-connector',
         from: from,
         to: from,
         accountId: accountId || 'default',
@@ -200,11 +201,11 @@ async function handleXMPPMessage(ctx: any) {
 }
 
 const xmppPlugin = {
-  id: 'xmpp-connector',
+  id: 'openclaw-xmpp-connector',
   name: 'XMPP Channel',
   description: 'XMPP messaging channel with username/password authentication',
   meta: {
-    id: 'xmpp-connector',
+    id: 'openclaw-xmpp-connector',
     label: 'XMPP',
     selectionLabel: 'XMPP',
     detailLabel: 'XMPP Messaging',
@@ -338,7 +339,7 @@ const xmppPlugin = {
             console.log(`[XMPP][outbound.sendText] 消息发送成功，messageId=${messageId}`);
           }
           log?.info?.(`[XMPP][outbound.sendText] 消息发送成功`);
-          return { channel: 'xmpp-connector', messageId };
+          return { channel: 'openclaw-xmpp-connector', messageId };
         } catch (err: any) {
           if (debug) {
             console.log(`[XMPP][outbound.sendText] 发送失败: ${err.message}`);
@@ -384,7 +385,7 @@ const xmppPlugin = {
                 console.log(`[XMPP][outbound.sendText] 消息发送成功，messageId=${messageId}`);
               }
               log?.info?.(`[XMPP][outbound.sendText] 消息发送成功`);
-              resolve({ channel: 'xmpp-connector', messageId });
+              resolve({ channel: 'openclaw-xmpp-connector', messageId });
             } catch (err: any) {
               if (debug) {
                 console.log(`[XMPP][outbound.sendText] 发送失败: ${err.message}`);
@@ -467,7 +468,7 @@ const xmppPlugin = {
         log?.info?.(`[XMPP] [${account.accountId}] 已发送在线状态`);
         
         if (runtime) {
-          runtime.channel.activity.record('xmpp-connector', account.accountId, 'start');
+          runtime.channel.activity.record('openclaw-xmpp-connector', account.accountId, 'start');
         }
       };
 
@@ -479,7 +480,7 @@ const xmppPlugin = {
         log?.error?.(`[XMPP] 连接错误: ${err.message}`);
         log?.error?.(`[XMPP] 错误堆栈: ${err.stack}`);
         if (runtime) {
-          runtime.channel.activity.record('xmpp-connector', account.accountId, 'error', { error: err.message });
+          runtime.channel.activity.record('openclaw-xmpp-connector', account.accountId, 'error', { error: err.message });
         }
       };
 
@@ -607,7 +608,7 @@ const xmppPlugin = {
             log?.warn?.(`[XMPP] 停止客户端错误: ${err.message}`);
           });
           if (runtime) {
-            runtime.channel.activity.record('xmpp-connector', account.accountId, 'stop');
+            runtime.channel.activity.record('openclaw-xmpp-connector', account.accountId, 'stop');
           }
         });
       }
@@ -628,7 +629,7 @@ const xmppPlugin = {
             log?.warn?.(`[XMPP] 停止客户端错误: ${err.message}`);
           });
           if (runtime) {
-            runtime.channel.activity.record('xmpp-connector', account.accountId, 'stop');
+            runtime.channel.activity.record('openclaw-xmpp-connector', account.accountId, 'stop');
           }
         },
       };
@@ -721,7 +722,7 @@ const xmppPlugin = {
 // ============ 插件注册 ============
 
 const plugin = {
-  id: 'xmpp-connector',
+  id: 'openclaw-xmpp-connector',
   name: 'XMPP Channel',
   description: 'XMPP messaging channel with username/password authentication',
   configSchema: xmppPlugin.configSchema,
@@ -744,7 +745,7 @@ const plugin = {
 
     // ===== Gateway Methods =====
 
-    api.registerGatewayMethod('xmpp-connector.status', async ({ respond, cfg }: any) => {
+    api.registerGatewayMethod('openclaw-xmpp-connector.status', async ({ respond, cfg }: any) => {
       const config = getConfig(cfg);
       const debug = isDebugMode(config);
       if (debug) {
@@ -754,7 +755,7 @@ const plugin = {
       respond(true, result);
     });
 
-    api.registerGatewayMethod('xmpp-connector.probe', async ({ 
+    api.registerGatewayMethod('openclaw-xmpp-connector.probe', async ({ 
 respond, cfg }: any) => {
       const config = getConfig(cfg);
       const debug = isDebugMode(config);
@@ -772,13 +773,13 @@ respond, cfg }: any) => {
      *   - content: 消息内容
      *   - accountId?: 使用的账号 ID（默认 default）    
      */
-    api.registerGatewayMethod('xmpp-connector.sendMessage', async ({ respond, cfg, params, log }: any) => {
+    api.registerGatewayMethod('openclaw-xmpp-connector.sendMessage', async ({ respond, cfg, params, log }: any) => {
       const account = xmppPlugin.config.resolveAccount(cfg, params?.accountId);
       const config = account?.config;
       const debug = isDebugMode(config);
       
       if (debug) {
-        console.log('[XMPP] gateway method: xmpp-connector.sendMessage');
+        console.log('[XMPP] gateway method: openclaw-xmpp-connector.sendMessage');
         console.log('[XMPP] params:', params);
       }
       const { to, content, accountId } = params || {};

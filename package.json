@@ -1,6 +1,6 @@
 {
   "name": "openclaw-xmpp-connector",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "XMPP channel plugin for OpenClaw — supports username/password authentication and message exchange",
   "main": "plugin.ts",
   "type": "module",
