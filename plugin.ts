@@ -133,64 +133,102 @@ interface GatewayOptions {
 
 async function* streamFromGateway(options: GatewayOptions): AsyncGenerator<string, void, unknown> {
   const { userContent, systemPrompts, sessionKey, gatewayAuth, log } = options;
+  console.log(`[XMPP][Gateway] 开始流式请求，session=${sessionKey}`);
+  log?.info?.(`[XMPP][Gateway] 开始流式请求，session=${sessionKey}`);
+  
   const rt = getRuntime();
+  console.log(`[XMPP][Gateway] 获取 runtime，gateway port=${rt.gateway?.port}`);
   const gatewayUrl = `http://127.0.0.1:${rt.gateway?.port || 18789}/v1/chat/completions`;
+  console.log(`[XMPP][Gateway] Gateway URL: ${gatewayUrl}`);
+  log?.info?.(`[XMPP][Gateway] Gateway URL: ${gatewayUrl}`);
 
   const messages: any[] = [];
   for (const prompt of systemPrompts) {
     messages.push({ role: 'system', content: prompt });
   }
   messages.push({ role: 'user', content: userContent });
+  console.log(`[XMPP][Gateway] 消息数量: ${messages.length}`);
+  log?.info?.(`[XMPP][Gateway] 消息数量: ${messages.length}`);
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (gatewayAuth) {
     headers['Authorization'] = `Bearer ${gatewayAuth}`;
+    console.log(`[XMPP][Gateway] 使用认证 token`);
   }
 
+  console.log(`[XMPP][Gateway] 发送 POST 请求到 ${gatewayUrl}`);
   log?.info?.(`[XMPP][Gateway] POST ${gatewayUrl}, session=${sessionKey}, messages=${messages.length}`);
 
-  const response = await fetch(gatewayUrl, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: 'default',
-      messages,
-      stream: true,
-      user: sessionKey,  // 用于 session 持久化
-    }),
-  });
+  try {
+    const response = await fetch(gatewayUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'default',
+        messages,
+        stream: true,
+        user: sessionKey,  // 用于 session 持久化
+      }),
+    });
 
-  log?.info?.(`[XMPP][Gateway] 响应 status=${response.status}, ok=${response.ok}, hasBody=${!!response.body}`);
+    console.log(`[XMPP][Gateway] 响应 status=${response.status}, ok=${response.ok}, hasBody=${!!response.body}`);
+    log?.info?.(`[XMPP][Gateway] 响应 status=${response.status}, ok=${response.ok}, hasBody=${!!response.body}`);
 
-  if (!response.ok || !response.body) {
-    const errText = response.body ? await response.text() : '(no body)';
-    log?.error?.(`[XMPP][Gateway] 错误响应: ${errText}`);
-    throw new Error(`Gateway error: ${response.status} - ${errText}`);
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const data = line.slice(6).trim();
-      if (data === '[DONE]') return;
-
-      try {
-        const chunk = JSON.parse(data);
-        const content = chunk.choices?.[0]?.delta?.content;
-        if (content) yield content;
-      } catch {}
+    if (!response.ok || !response.body) {
+      const errText = response.body ? await response.text() : '(no body)';
+      console.log(`[XMPP][Gateway] 错误响应: ${errText}`);
+      log?.error?.(`[XMPP][Gateway] 错误响应: ${errText}`);
+      throw new Error(`Gateway error: ${response.status} - ${errText}`);
     }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let receivedChunks = 0;
+
+    console.log(`[XMPP][Gateway] 开始读取响应流`);
+    log?.info?.(`[XMPP][Gateway] 开始读取响应流`);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') {
+          console.log(`[XMPP][Gateway] 流结束`);
+          log?.info?.(`[XMPP][Gateway] 流结束`);
+          return;
+        }
+
+        try {
+          const chunk = JSON.parse(data);
+          const content = chunk.choices?.[0]?.delta?.content;
+          if (content) {
+            receivedChunks++;
+            if (receivedChunks % 10 === 0) {
+              console.log(`[XMPP][Gateway] 已收到 ${receivedChunks} 个 chunks`);
+              log?.debug?.(`[XMPP][Gateway] 已收到 ${receivedChunks} 个 chunks`);
+            }
+            yield content;
+          }
+        } catch (err: any) {
+          console.log(`[XMPP][Gateway] 解析 chunk 错误: ${err.message}`);
+          log?.debug?.(`[XMPP][Gateway] 解析 chunk 错误: ${err.message}`);
+        }
+      }
+    }
+  } catch (err: any) {
+    console.log(`[XMPP][Gateway] 流式请求错误: ${err.message}`);
+    console.log(`[XMPP][Gateway] 错误堆栈: ${err.stack}`);
+    log?.error?.(`[XMPP][Gateway] 流式请求错误: ${err.message}`);
+    log?.error?.(`[XMPP][Gateway] 错误堆栈: ${err.stack}`);
+    throw err;
   }
 }
 
@@ -209,32 +247,45 @@ async function handleXMPPMessage(params: {
   xmppClient: any;
 }): Promise<void> {
   const { cfg, accountId, from, text, log, xmppConfig, xmppClient } = params;
+  console.log(`[XMPP] 进入 handleXMPPMessage，from=${from}, text="${text.slice(0, 50)}"...`);
+  log?.info?.(`[XMPP] 进入 handleXMPPMessage，from=${from}, text="${text.slice(0, 50)}"...`);
 
-  if (!text) return;
+  if (!text) {
+    console.log(`[XMPP] 空消息，跳过处理`);
+    return;
+  }
 
   const senderId = from;
   const senderName = from.split('@')[0];
 
-  log?.info?.(`[XMPP] 收到消息: from=${senderName} text="${text.slice(0, 50)}..."`);
+  console.log(`[XMPP] 收到消息: from=${senderName} text="${text.slice(0, 50)}"...`);
+  log?.info?.(`[XMPP] 收到消息: from=${senderName} text="${text.slice(0, 50)}"...`);
 
   // ===== Session 管理 =====
   const sessionTimeout = xmppConfig.sessionTimeout ?? 1800000; // 默认 30 分钟
   const forceNewSession = isNewSessionCommand(text);
+  console.log(`[XMPP] 会话管理: forceNewSession=${forceNewSession}, sessionTimeout=${sessionTimeout}`);
+  log?.info?.(`[XMPP] 会话管理: forceNewSession=${forceNewSession}, sessionTimeout=${sessionTimeout}`);
 
   // 如果是新会话命令，直接回复确认消息
   if (forceNewSession) {
+    console.log(`[XMPP] 处理新会话命令`);
     const { sessionKey } = getSessionKey(senderId, true, sessionTimeout, log);
+    console.log(`[XMPP] 发送新会话确认消息`);
     xmppClient.send(from, '✨ 已开启新会话，之前的对话已清空。');
+    console.log(`[XMPP] 用户请求新会话: ${senderId}, newKey=${sessionKey}`);
     log?.info?.(`[XMPP] 用户请求新会话: ${senderId}, newKey=${sessionKey}`);
     return;
   }
 
   // 获取或创建 session
   const { sessionKey, isNew } = getSessionKey(senderId, false, sessionTimeout, log);
+  console.log(`[XMPP][Session] key=${sessionKey}, isNew=${isNew}`);
   log?.info?.(`[XMPP][Session] key=${sessionKey}, isNew=${isNew}`);
 
   // Gateway 认证：优先使用 token，其次 password
   const gatewayAuth = xmppConfig.gatewayToken || xmppConfig.gatewayPassword || '';
+  console.log(`[XMPP] Gateway 认证: ${gatewayAuth ? '已配置' : '未配置'}`);
 
   // 构建 system prompts
   const systemPrompts: string[] = [];
@@ -242,12 +293,16 @@ async function handleXMPPMessage(params: {
   // 自定义 system prompt
   if (xmppConfig.systemPrompt) {
     systemPrompts.push(xmppConfig.systemPrompt);
+    console.log(`[XMPP] 使用自定义 system prompt`);
   }
 
   // 处理消息
   let fullResponse = '';
   try {
+    console.log(`[XMPP] 开始请求 Gateway 流式接口...`);
     log?.info?.(`[XMPP] 开始请求 Gateway 流式接口...`);
+    
+    const startTime = Date.now();
     for await (const chunk of streamFromGateway({
       userContent: text,
       systemPrompts,
@@ -257,19 +312,26 @@ async function handleXMPPMessage(params: {
     })) {
       fullResponse += chunk;
     }
-
+    const endTime = Date.now();
+    
+    console.log(`[XMPP] Gateway 流完成，共 ${fullResponse.length} 字符，耗时 ${endTime - startTime}ms`);
     log?.info?.(`[XMPP] Gateway 流完成，共 ${fullResponse.length} 字符`);
 
     // 发送响应
     if (fullResponse) {
+      console.log(`[XMPP] 发送响应，长度 ${fullResponse.length} 字符`);
       xmppClient.send(from, fullResponse);
+      console.log(`[XMPP] 消息回复完成，共 ${fullResponse.length} 字符`);
       log?.info?.(`[XMPP] 消息回复完成，共 ${fullResponse.length} 字符`);
     } else {
+      console.log(`[XMPP] 无响应内容，发送默认消息`);
       xmppClient.send(from, '（无响应）');
       log?.info?.(`[XMPP] 无响应内容`);
     }
 
   } catch (err: any) {
+    console.log(`[XMPP] Gateway 调用失败: ${err.message}`);
+    console.log(`[XMPP] 错误堆栈: ${err.stack}`);
     log?.error?.(`[XMPP] Gateway 调用失败: ${err.message}`);
     log?.error?.(`[XMPP] 错误详情: ${err.stack}`);
     xmppClient.send(from, `抱歉，处理请求时出错: ${err.message}`);
@@ -354,7 +416,7 @@ const xmppPlugin = {
   security: {
     resolveDmPolicy: ({ account }: any) => ({
       policy: account.config?.dmPolicy || 'open',
-      allowFrom: account.config?.allowFrom || [],
+      allowFrom: Array.isArray(account.config?.allowFrom) ? account.config.allowFrom : [],
       policyPath: 'channels.xmpp-connector.dmPolicy',
       allowFromPath: 'channels.xmpp-connector.allowFrom',
       approveHint: '使用 /allow xmpp-connector:<userId> 批准用户',
@@ -385,112 +447,213 @@ const xmppPlugin = {
      */
     sendText: async (ctx: any) => {
       const { cfg, to, text, accountId, log } = ctx;
+      console.log(`[XMPP][outbound.sendText] 开始发送消息，to=${to}, text="${text.slice(0, 50)}"...`);
+      log?.info?.(`[XMPP][outbound.sendText] 开始发送消息，to=${to}, text="${text.slice(0, 50)}"...`);
+      
       const account = xmppPlugin.config.resolveAccount(cfg, accountId);
       const config = account?.config;
 
       if (!config?.username || !config?.password || !config?.server) {
+        console.log('[XMPP][outbound.sendText] 配置不完整');
         throw new Error('XMPP not configured');
       }
 
       if (!to) {
+        console.log('[XMPP][outbound.sendText] 目标不能为空');
         throw new Error('Target is required. Format: user@domain.com');
       }
 
       // 创建临时 XMPP 客户端发送消息
       return new Promise((resolve, reject) => {
-        const client = xmpp.createClient({
+        // 断开之前的连接（如果存在）
+        try {
+          console.log('[XMPP][outbound.sendText] 断开之前的连接...');
+          xmpp.disconnect();
+        } catch (err: any) {
+          console.log('[XMPP][outbound.sendText] 断开连接失败:', err.message);
+        }
+
+        xmpp.on('online', () => {
+          console.log(`[XMPP][outbound.sendText] 发送消息: to="${to}", text="${text.slice(0, 50)}"...`);
+          log?.info?.(`[XMPP][outbound.sendText] 发送消息: to="${to}", text="${text.slice(0, 50)}"...`);
+          xmpp.send(to, text);
+          // 发送后立即断开连接
+          xmpp.disconnect();
+          const messageId = `msg_${Date.now()}`;
+          console.log(`[XMPP][outbound.sendText] 消息发送成功，messageId=${messageId}`);
+          log?.info?.(`[XMPP][outbound.sendText] 消息发送成功`);
+          resolve({ channel: 'xmpp-connector', messageId });
+        });
+
+        xmpp.on('error', (err: any) => {
+          console.log(`[XMPP][outbound.sendText] 发送失败: ${err.message}`);
+          console.log(`[XMPP][outbound.sendText] 错误堆栈: ${err.stack}`);
+          log?.error?.(`[XMPP][outbound.sendText] 发送失败: ${err.message}`);
+          xmpp.disconnect();
+          reject(new Error(err.message));
+        });
+
+        console.log(`[XMPP][outbound.sendText] 连接到 XMPP 服务器: ${config.server}:${config.port || 5222}`);
+        xmpp.connect({
           jid: config.username,
           password: config.password,
           host: config.server,
           port: config.port || 5222,
         });
-
-        client.on('online', () => {
-          log?.info?.(`[XMPP][outbound.sendText] 发送消息: to="${to}", text="${text.slice(0, 50)}..."`);
-          client.send(to, text);
-          // 发送后立即断开连接
-          client.end();
-          resolve({ channel: 'xmpp-connector', messageId: `msg_${Date.now()}` });
-        });
-
-        client.on('error', (err: any) => {
-          log?.error?.(`[XMPP][outbound.sendText] 发送失败: ${err.message}`);
-          client.end();
-          reject(new Error(err.message));
-        });
-
-        client.connect();
       });
     },
   },
   gateway: {
     startAccount: async (ctx: any) => {
-      const { account, cfg, abortSignal } = ctx;
+      console.log('[XMPP] startAccount 方法被调用');
+      console.log('[XMPP] ctx 对象:', ctx);
+      const { account, cfg, abortSignal, log } = ctx;
+      console.log('[XMPP] account:', account);
+      console.log('[XMPP] cfg:', cfg);
       const config = account.config;
 
       if (!config.username || !config.password || !config.server) {
+        console.log('[XMPP] 配置不完整:', { username: config.username, password: config.password, server: config.server });
         throw new Error('XMPP username, password, and server are required');
       }
 
-      ctx.log?.info(`[${account.accountId}] 启动 XMPP 客户端...`);
+      console.log(`[XMPP] [${account.accountId}] 启动 XMPP 客户端...`);
+      log?.info?.(`[${account.accountId}] 启动 XMPP 客户端...`);
 
-      const client = xmpp.createClient({
-        jid: config.username,
-        password: config.password,
-        host: config.server,
-        port: config.port || 5222,
-      });
+      // 断开之前的连接（如果存在）
+      try {
+        console.log('[XMPP] 断开之前的连接...');
+        xmpp.disconnect();
+        console.log('[XMPP] 断开连接成功');
+      } catch (err: any) {
+        console.log('[XMPP] 断开连接失败:', err.message);
+        log?.warn?.(`[XMPP] 断开连接失败: ${err.message}`);
+      }
 
-      client.on('online', () => {
-        ctx.log?.info(`[${account.accountId}] XMPP 客户端已连接`);
+      // 定义事件处理函数
+      const onlineHandler = () => {
+        console.log(`[XMPP] [${account.accountId}] XMPP 客户端已连接`);
+        log?.info?.(`[${account.accountId}] XMPP 客户端已连接`);
         const rt = getRuntime();
         rt.channel.activity.record('xmpp-connector', account.accountId, 'start');
-      });
+      };
 
-      client.on('error', (err: any) => {
-        ctx.log?.error?.(`[XMPP] 连接错误: ${err.message}`);
+      const errorHandler = (err: any) => {
+        console.log(`[XMPP] 连接错误: ${err.message}`);
+        console.log(`[XMPP] 错误堆栈: ${err.stack}`);
+        log?.error?.(`[XMPP] 连接错误: ${err.message}`);
+        log?.error?.(`[XMPP] 错误堆栈: ${err.stack}`);
         const rt = getRuntime();
         rt.channel.activity.record('xmpp-connector', account.accountId, 'error', { error: err.message });
-      });
+      };
 
-      client.on('chat', async (from: string, text: string) => {
+      const chatHandler = async (from: string, text: string) => {
+        console.log(`[XMPP] 收到聊天消息, from=${from}, text="${text.slice(0, 50)}"...`);
         const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        ctx.log?.info?.(`[XMPP] 收到聊天消息, from=${from}, text="${text.slice(0, 50)}..."`);
+        log?.info?.(`[XMPP] 收到聊天消息, from=${from}, text="${text.slice(0, 50)}"...`);
 
         // 消息去重
         if (isMessageProcessed(messageId)) {
-          ctx.log?.warn?.(`[XMPP] 检测到重复消息，跳过处理: messageId=${messageId}`);
+          console.log(`[XMPP] 检测到重复消息，跳过处理: messageId=${messageId}`);
+          log?.warn?.(`[XMPP] 检测到重复消息，跳过处理: messageId=${messageId}`);
           return;
         }
 
         // 标记消息为已处理
         markMessageProcessed(messageId);
+        console.log(`[XMPP] 标记消息为已处理: messageId=${messageId}`);
 
         // 异步处理消息
         try {
+          console.log(`[XMPP] 开始处理消息...`);
+          log?.info?.(`[XMPP] 开始处理消息...`);
           await handleXMPPMessage({
             cfg,
             accountId: account.accountId,
             from,
             text,
-            log: ctx.log,
+            log,
             xmppConfig: config,
-            xmppClient: client,
+            xmppClient: xmpp,
           });
+          console.log(`[XMPP] 消息处理完成`);
+          log?.info?.(`[XMPP] 消息处理完成`);
         } catch (error: any) {
-          ctx.log?.error?.(`[XMPP] 处理消息异常: ${error.message}`);
+          console.log(`[XMPP] 处理消息异常: ${error.message}`);
+          console.log(`[XMPP] 错误堆栈: ${error.stack}`);
+          log?.error?.(`[XMPP] 处理消息异常: ${error.message}`);
+          log?.error?.(`[XMPP] 错误堆栈: ${error.stack}`);
         }
+      };
+
+      // 添加事件监听器
+      console.log('[XMPP] 添加事件监听器...');
+      log?.info?.(`[XMPP] 添加事件监听器...`);
+      
+      // 清除之前的事件监听器（如果存在）
+      try {
+        xmpp.removeAllListeners('online');
+        xmpp.removeAllListeners('error');
+        xmpp.removeAllListeners('chat');
+        xmpp.removeAllListeners('stanza');
+        xmpp.removeAllListeners('disconnect');
+        console.log('[XMPP] 清除之前的事件监听器');
+      } catch (err: any) {
+        console.log('[XMPP] 清除事件监听器失败:', err.message);
+      }
+      
+      xmpp.on('online', onlineHandler);
+      xmpp.on('error', errorHandler);
+      xmpp.on('chat', chatHandler);
+      
+      // 添加更多事件监听器
+      xmpp.on('stanza', (stanza: any) => {
+        console.log(`[XMPP] 收到 Stanza: ${stanza.toString()}`);
+        log?.debug?.(`[XMPP] 收到 Stanza: ${stanza.toString()}`);
+      });
+      
+      xmpp.on('disconnect', () => {
+        console.log(`[XMPP] [${account.accountId}] XMPP 客户端已断开连接`);
+        log?.info?.(`[${account.accountId}] XMPP 客户端已断开连接`);
       });
 
-      client.connect();
+      console.log('[XMPP] 连接到 XMPP 服务器...', {
+        jid: config.username,
+        host: config.server,
+        port: config.port || 5222,
+      });
+      log?.info?.(`[XMPP] 连接到 XMPP 服务器: ${config.server}:${config.port || 5222}`);
+      
+      try {
+        xmpp.connect({
+          jid: config.username,
+          password: config.password,
+          host: config.server,
+          port: config.port || 5222,
+        });
+        console.log('[XMPP] 连接命令已发送');
+        log?.info?.(`[XMPP] 连接命令已发送`);
+      } catch (err: any) {
+        console.log('[XMPP] 连接命令失败:', err.message);
+        console.log('[XMPP] 错误堆栈:', err.stack);
+        log?.error?.(`[XMPP] 连接命令失败: ${err.message}`);
+        log?.error?.(`[XMPP] 错误堆栈: ${err.stack}`);
+      }
 
       let stopped = false;
       if (abortSignal) {
         abortSignal.addEventListener('abort', () => {
           if (stopped) return;
           stopped = true;
-          ctx.log?.info(`[${account.accountId}] 停止 XMPP 客户端...`);
-          client.end();
+          console.log(`[XMPP] [${account.accountId}] 停止 XMPP 客户端...`);
+          log?.info?.(`[${account.accountId}] 停止 XMPP 客户端...`);
+          // 移除事件监听器
+          xmpp.removeListener('online', onlineHandler);
+          xmpp.removeListener('error', errorHandler);
+          xmpp.removeListener('chat', chatHandler);
+          xmpp.removeListener('stanza');
+          xmpp.removeListener('disconnect');
+          xmpp.disconnect();
           const rt = getRuntime();
           rt.channel.activity.record('xmpp-connector', account.accountId, 'stop');
         });
@@ -500,8 +663,15 @@ const xmppPlugin = {
         stop: () => {
           if (stopped) return;
           stopped = true;
-          ctx.log?.info(`[${account.accountId}] XMPP Channel 已停止`);
-          client.end();
+          console.log(`[XMPP] [${account.accountId}] XMPP Channel 已停止`);
+          log?.info?.(`[${account.accountId}] XMPP Channel 已停止`);
+          // 移除事件监听器
+          xmpp.removeListener('online', onlineHandler);
+          xmpp.removeListener('error', errorHandler);
+          xmpp.removeListener('chat', chatHandler);
+          xmpp.removeListener('stanza');
+          xmpp.removeListener('disconnect');
+          xmpp.disconnect();
           const rt = getRuntime();
           rt.channel.activity.record('xmpp-connector', account.accountId, 'stop');
         },
@@ -511,37 +681,49 @@ const xmppPlugin = {
   status: {
     defaultRuntime: { accountId: 'default', running: false, lastStartAt: null, lastStopAt: null, lastError: null },
     probe: async ({ cfg }: any) => {
-      if (!isConfigured(cfg)) return { ok: false, error: 'Not configured' };
+      console.log('[XMPP] status.probe 被调用');
+      if (!isConfigured(cfg)) {
+        console.log('[XMPP] 未配置');
+        return { ok: false, error: 'Not configured' };
+      }
       try {
         const config = getConfig(cfg);
+        console.log(`[XMPP] 开始连接测试: ${config.server}:${config.port || 5222}`);
         // 尝试连接 XMPP 服务器
         return new Promise((resolve) => {
-          const client = xmpp.createClient({
+          // 断开之前的连接（如果存在）
+          try {
+            xmpp.disconnect();
+          } catch {}
+
+          xmpp.on('online', () => {
+            console.log('[XMPP] 连接测试成功');
+            xmpp.disconnect();
+            resolve({ ok: true, details: { username: config.username, server: config.server } });
+          });
+
+          xmpp.on('error', (err: any) => {
+            console.log(`[XMPP] 连接测试失败: ${err.message}`);
+            xmpp.disconnect();
+            resolve({ ok: false, error: err.message });
+          });
+
+          xmpp.connect({
             jid: config.username,
             password: config.password,
             host: config.server,
             port: config.port || 5222,
           });
 
-          client.on('online', () => {
-            client.end();
-            resolve({ ok: true, details: { username: config.username, server: config.server } });
-          });
-
-          client.on('error', (err: any) => {
-            client.end();
-            resolve({ ok: false, error: err.message });
-          });
-
-          client.connect();
-
           // 超时处理
           setTimeout(() => {
-            client.end();
+            console.log('[XMPP] 连接测试超时');
+            xmpp.disconnect();
             resolve({ ok: false, error: 'Connection timeout' });
           }, 10000);
         });
       } catch (error: any) {
+        console.log(`[XMPP] 连接测试异常: ${error.message}`);
         return { ok: false, error: error.message };
       }
     },
@@ -561,23 +743,24 @@ const plugin = {
   id: 'xmpp-connector',
   name: 'XMPP Channel',
   description: 'XMPP messaging channel with username/password authentication',
-  configSchema: {
-    type: 'object',
-    additionalProperties: true,
-    properties: { enabled: { type: 'boolean', default: true } },
-  },
+  configSchema: xmppPlugin.configSchema,
   register(api: ClawdbotPluginApi) {
+    console.log('[XMPP] 插件注册开始');
     runtime = api.runtime;
+    console.log('[XMPP] 注册通道插件');
     api.registerChannel({ plugin: xmppPlugin });
+    console.log('[XMPP] 插件已注册（支持用户名密码登录和消息收发）');
 
     // ===== Gateway Methods =====
 
     api.registerGatewayMethod('xmpp-connector.status', async ({ respond, cfg }: any) => {
+      console.log('[XMPP] gateway method: xmpp-connector.status');
       const result = await xmppPlugin.status.probe({ cfg });
       respond(true, result);
     });
 
     api.registerGatewayMethod('xmpp-connector.probe', async ({ respond, cfg }: any) => {
+      console.log('[XMPP] gateway method: xmpp-connector.probe');
       const result = await xmppPlugin.status.probe({ cfg });
       respond(result.ok, result);
     });
@@ -590,22 +773,28 @@ const plugin = {
      *   - accountId?: 使用的账号 ID（默认 default）
      */
     api.registerGatewayMethod('xmpp-connector.sendMessage', async ({ respond, cfg, params, log }: any) => {
+      console.log('[XMPP] gateway method: xmpp-connector.sendMessage');
+      console.log('[XMPP] params:', params);
       const { to, content, accountId } = params || {};
       const account = xmppPlugin.config.resolveAccount(cfg, accountId);
 
       if (!account.config?.username) {
+        console.log('[XMPP] 未配置');
         return respond(false, { error: 'XMPP not configured' });
       }
 
       if (!to) {
+        console.log('[XMPP] 目标不能为空');
         return respond(false, { error: 'to is required' });
       }
 
       if (!content) {
+        console.log('[XMPP] 内容不能为空');
         return respond(false, { error: 'content is required' });
       }
 
       try {
+        console.log(`[XMPP] 开始发送消息，to=${to}, content="${content.slice(0, 50)}"...`);
         const result = await xmppPlugin.outbound.sendText({
           cfg,
           to,
@@ -613,8 +802,11 @@ const plugin = {
           accountId,
           log,
         });
+        console.log('[XMPP] 消息发送成功:', result);
         respond(true, result);
       } catch (error: any) {
+        console.log(`[XMPP] 消息发送失败: ${error.message}`);
+        console.log(`[XMPP] 错误堆栈: ${error.stack}`);
         respond(false, { error: error.message });
       }
     });
