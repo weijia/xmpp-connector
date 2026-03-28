@@ -21,9 +21,11 @@
   },
   "dependencies": {
     "@xmpp/client": "^0.13.1",
-    "@xmpp/debug": "^0.13.1",
     "@xmpp/connection": "^0.13.1",
-    "@xmpp/jid": "^0.13.1"
+    "@xmpp/debug": "^0.13.1",
+    "@xmpp/jid": "^0.13.1",
+    "sasl-scram-sha-1": "^1.4.0",
+    "saslmechanisms": "^0.1.1"
   },
   "openclaw": {
     "extensions": [

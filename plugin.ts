@@ -1,6 +1,8 @@
 import type { ClawdbotPluginDefinition, ClawdbotPluginApi, ClawdbotConfig } from '../../src/plugins/types.js';
 import { client, xml } from '@xmpp/client';
 import { jid } from '@xmpp/jid';
+import SASLFactory from 'saslmechanisms';
+import ScramSHA1 from 'sasl-scram-sha-1';
 
 // 消息去重缓存
 const processedMessages = new Set<string>();
@@ -355,10 +357,18 @@ const xmppPlugin = {
         }
         
         return new Promise((resolve, reject) => {
+          // 创建 SASL 工厂并注册 SCRAM-SHA-1 机制
+          const saslFactory = new SASLFactory();
+          saslFactory.use(ScramSHA1);
+
           const tempClient = client({
-            service: `xmpp://${config.server}:${config.port || 5222}`,
+            service: `xmpps://${config.server}:${config.port || 5223}`,
             username: config.username,
             password: config.password,
+            sasl: {
+              mechanisms: ['SCRAM-SHA-1'],
+              factory: saslFactory
+            }
           });
 
           tempClient.on('online', () => {
@@ -443,11 +453,19 @@ const xmppPlugin = {
       log?.info?.(`[${account.accountId}] 启动 XMPP 客户端...`);
       log?.info?.(`[XMPP] 连接配置: service=xmpp://${config.server}:${config.port || 5222}, username=${config.username}`);
 
+      // 创建 SASL 工厂并注册 SCRAM-SHA-1 机制
+      const saslFactory = new SASLFactory();
+      saslFactory.use(ScramSHA1);
+
       // 创建新的XMPP客户端实例
       const xmppClient = client({
-        service: `xmpp://${config.server}:${config.port || 5222}`,
+        service: `xmpps://${config.server}:${config.port || 5223}`,
         username: config.username,
         password: config.password,
+        sasl: {
+          mechanisms: ['SCRAM-SHA-1'],
+          factory: saslFactory
+        }
       });
       
       // 更新全局XMPP实例
@@ -656,11 +674,19 @@ const xmppPlugin = {
           console.log(`[XMPP] 开始连接测试 ${config.server}:${config.port || 5222}`);
           console.log(`[XMPP] 测试配置: username=${config.username}, password=***, server=${config.server}, port=${config.port || 5222}`);
         }
+        // 创建 SASL 工厂并注册 SCRAM-SHA-1 机制
+        const saslFactory = new SASLFactory();
+        saslFactory.use(ScramSHA1);
+
         // 创建临时XMPP客户端进行连接测试
         const testClient = client({
-          service: `xmpp://${config.server}:${config.port || 5222}`,
+          service: `xmpps://${config.server}:${config.port || 5223}`,
           username: config.username,
           password: config.password,
+          sasl: {
+            mechanisms: ['SCRAM-SHA-1'],
+            factory: saslFactory
+          }
         });
         
         // 测试连接 XMPP 服务器
