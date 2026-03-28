@@ -27,7 +27,7 @@ Add the following configuration to your OpenClaw config file:
       "username": "your-username-without-server",
       "password": "your-password",
       "server": "xmpp-server.com",
-      "port": 5222,
+      "port": 5223,
       "gatewayToken": "your-openclaw-gateway-token",
       "debug": false
     }
