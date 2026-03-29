@@ -265,7 +265,7 @@ const xmppPlugin = {
       username: { label: 'Username (JID)', help: 'Format: user@domain.com' },
       password: { label: 'Password', help: 'XMPP account password', sensitive: true },
       server: { label: 'Server', help: 'XMPP server hostname' },
-      port: { label: 'Port', help: 'XMPP server port (default: 5222)', advanced: true },
+      port: { label: 'Port', help: 'XMPP server port (default: 5223)', advanced: true },
       gatewayToken: { label: 'Gateway Token', help: 'OpenClaw gateway token', sensitive: true },
       systemPrompt: { label: 'System Prompt', help: 'Custom system prompt for XMPP messages', advanced: true },
       debug: { label: 'Debug Mode', help: 'Enable debug logging', advanced: true },
@@ -302,11 +302,11 @@ const xmppPlugin = {
       if (debug) {
         console.log(`[XMPP][outbound.sendText] 发送消息: to=${to}, text=${text.slice(0, 50)}...`);
         console.log(`[XMPP][outbound.sendText] 账户ID: ${accountId || 'default'}`);
-        console.log(`[XMPP][outbound.sendText] 配置: username=${config?.username}, server=${config?.server}, port=${config?.port || 5222}`);
+        console.log(`[XMPP][outbound.sendText] 配置: username=${config?.username}, server=${config?.server}, port=${config?.port || 5223}`);
       }
       log?.info?.(`[XMPP][outbound.sendText] 发送消息: to=${to}, text=${text.slice(0, 50)}...`);
       log?.info?.(`[XMPP][outbound.sendText] 账户ID: ${accountId || 'default'}`);
-      log?.info?.(`[XMPP][outbound.sendText] 配置: username=${config?.username}, server=${config?.server}, port=${config?.port || 5222}`);
+      log?.info?.(`[XMPP][outbound.sendText] 配置: username=${config?.username}, server=${config?.server}, port=${config?.port || 5223}`);
 
       if (!config?.username || !config?.password || !config?.server) {
         if (debug) {
@@ -448,10 +448,10 @@ const xmppPlugin = {
 
       if (debug) {
         console.log(`[XMPP] [${account.accountId}] 启动 XMPP 客户端...`);
-        console.log(`[XMPP] 连接配置: service=xmpp://${config.server}:${config.port || 5222}, username=${config.username}, password=***`);
+        console.log(`[XMPP] 连接配置: service=xmpp://${config.server}:${config.port || 5223}, username=${config.username}, password=***`);
       }
       log?.info?.(`[${account.accountId}] 启动 XMPP 客户端...`);
-      log?.info?.(`[XMPP] 连接配置: service=xmpp://${config.server}:${config.port || 5222}, username=${config.username}`);
+      log?.info?.(`[XMPP] 连接配置: service=xmpp://${config.server}:${config.port || 5223}, username=${config.username}`);
 
       // 创建 SASL 工厂并注册 SCRAM-SHA-1 机制
       const saslFactory = new SASLFactory();
@@ -587,11 +587,11 @@ const xmppPlugin = {
 
       if (debug) {
         console.log('[XMPP] 连接到 XMPP 服务器...', {
-          service: `xmpp://${config.server}:${config.port || 5222}`,
+          service: `xmpp://${config.server}:${config.port || 5223}`,
           username: config.username,
         });
       }
-      log?.info?.(`[XMPP] 连接到 XMPP 服务器 ${config.server}:${config.port || 5222}`);
+      log?.info?.(`[XMPP] 连接到 XMPP 服务器 ${config.server}:${config.port || 5223}`);
 
       try {
         await xmppClient.start();
@@ -661,7 +661,7 @@ const xmppPlugin = {
       
       if (debug) {
         console.log('[XMPP] status.probe 被调用');
-        console.log(`[XMPP] 配置: username=${config.username}, server=${config.server}, port=${config.port || 5222}`);
+        console.log(`[XMPP] 配置: username=${config.username}, server=${config.server}, port=${config.port || 5223}`);
       }
       if (!isConfigured(cfg)) {
         if (debug) {
@@ -671,8 +671,8 @@ const xmppPlugin = {
       }
       try {
         if (debug) {
-          console.log(`[XMPP] 开始连接测试 ${config.server}:${config.port || 5222}`);
-          console.log(`[XMPP] 测试配置: username=${config.username}, password=***, server=${config.server}, port=${config.port || 5222}`);
+          console.log(`[XMPP] 开始连接测试 ${config.server}:${config.port || 5223}`);
+          console.log(`[XMPP] 测试配置: username=${config.username}, password=***, server=${config.server}, port=${config.port || 5223}`);
         }
         // 创建 SASL 工厂并注册 SCRAM-SHA-1 机制
         const saslFactory = new SASLFactory();
